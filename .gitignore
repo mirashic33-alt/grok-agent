@@ -1,0 +1,20 @@
+# Ключи и секреты
+data/keys.enc
+
+# Логи
+agent.log
+workspace/token_usage.log
+
+# История разговоров (личное)
+workspace/chat_history.json
+workspace/memory/
+
+# Python кеш
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.idea/

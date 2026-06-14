@@ -1,0 +1,203 @@
+import data.keystore as keystore
+import data.config as config
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QStackedWidget,
+    QLabel, QLineEdit, QPushButton, QFrame, QWidget, QComboBox,
+)
+
+_KEY_FIELDS = [
+    ("GROK_API_KEY",     "Grok API Key",        "Вставьте ключ xai-...",           True),
+    ("TELEGRAM_TOKEN",   "Telegram Bot Token",   "Вставьте токен от @BotFather...", True),
+    ("TELEGRAM_CHAT_ID", "Telegram Chat ID",     "Ваш числовой chat_id...",         False),
+]
+
+_GROK_MODELS = ["grok-4.3", "grok-3", "grok-3-mini", "grok-2-vision-1212"]
+
+
+def _hline() -> QFrame:
+    line = QFrame()
+    line.setFrameShape(QFrame.Shape.HLine)
+    line.setFixedHeight(1)
+    return line
+
+
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Настройки")
+        self.setMinimumWidth(480)
+        self.setFixedHeight(340)
+        self.setModal(True)
+        self._key_fields: dict[str, QLineEdit] = {}
+        self._history_field: QLineEdit | None = None
+        self._model_combo: QComboBox | None = None
+        self._web_search_combo: QComboBox | None = None
+        self._save_actions: list = []
+        self._tab_btns: dict[str, QPushButton] = {}
+        self._tab_order: list[str] = []
+        self._stack = QStackedWidget()
+        self._build_ui()
+
+    # ── Сохранение ──────────────────────────────────────────────────────────
+
+    def _on_save(self):
+        for action in self._save_actions:
+            try:
+                action()
+            except Exception:
+                pass
+        self.accept()
+
+    # ── Скелет ──────────────────────────────────────────────────────────────
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Заголовок
+        title_bar = QWidget()
+        title_bar.setObjectName("settings_title_bar")
+        tl = QHBoxLayout(title_bar)
+        tl.setContentsMargins(16, 12, 16, 12)
+        lbl = QLabel("Настройки")
+        lbl.setObjectName("settings_title")
+        tl.addWidget(lbl)
+        root.addWidget(title_bar)
+        root.addWidget(_hline())
+
+        # Вкладки
+        tab_bar = QWidget()
+        tab_bar.setObjectName("settings_tab_bar")
+        self._tab_layout = QHBoxLayout(tab_bar)
+        self._tab_layout.setContentsMargins(8, 4, 8, 4)
+        self._tab_layout.setSpacing(4)
+        self._tab_layout.addStretch()
+        root.addWidget(tab_bar)
+        root.addWidget(_hline())
+
+        root.addWidget(self._stack, 1)
+        root.addWidget(_hline())
+
+        # Футер
+        footer = QWidget()
+        footer.setObjectName("settings_footer")
+        fl = QHBoxLayout(footer)
+        fl.setContentsMargins(12, 8, 12, 8)
+        fl.setSpacing(8)
+        fl.addStretch()
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setFixedSize(90, 30)
+        cancel_btn.clicked.connect(self.reject)
+        save_btn = QPushButton("Сохранить")
+        save_btn.setObjectName("settings_save_btn")
+        save_btn.setFixedSize(100, 30)
+        save_btn.clicked.connect(self._on_save)
+        fl.addWidget(cancel_btn)
+        fl.addWidget(save_btn)
+        root.addWidget(footer)
+
+        self._add_tab("keys",  "Ключи",  self._build_keys_tab)
+        self._add_tab("model", "Модель", self._build_model_tab)
+        self._switch_tab("keys")
+
+    # ── Система вкладок ──────────────────────────────────────────────────────
+
+    def _add_tab(self, key: str, label: str, builder):
+        btn = QPushButton(label)
+        btn.setObjectName("tab_btn")
+        btn.setCheckable(True)
+        btn.setFixedHeight(26)
+        btn.clicked.connect(lambda _=False, k=key: self._switch_tab(k))
+        self._tab_layout.insertWidget(self._tab_layout.count() - 1, btn)
+        self._tab_btns[key] = btn
+        self._stack.addWidget(builder())
+        self._tab_order.append(key)
+
+    def _switch_tab(self, key: str):
+        self._stack.setCurrentIndex(self._tab_order.index(key))
+        for k, btn in self._tab_btns.items():
+            btn.setChecked(k == key)
+
+    # ── Вспомогательные ─────────────────────────────────────────────────────
+
+    def _body_widget(self) -> tuple[QWidget, QVBoxLayout]:
+        body = QWidget()
+        body.setObjectName("settings_body")
+        lay = QVBoxLayout(body)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+        return body, lay
+
+    def _row(self, lay: QVBoxLayout, label: str, widget: QWidget):
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        lbl = QLabel(label)
+        lbl.setObjectName("settings_row_label")
+        lbl.setFixedWidth(170)
+        row.addWidget(lbl)
+        row.addWidget(widget, 1)
+        lay.addLayout(row)
+
+    # ── Вкладка Ключи ───────────────────────────────────────────────────────
+
+    def _build_keys_tab(self) -> QWidget:
+        body, lay = self._body_widget()
+        for key, label, placeholder, secret in _KEY_FIELDS:
+            field = QLineEdit(keystore.get(key))
+            field.setPlaceholderText(placeholder)
+            field.setFixedHeight(28)
+            field.setObjectName("settings_field")
+            if secret:
+                field.setEchoMode(QLineEdit.EchoMode.Password)
+            self._key_fields[key] = field
+            self._row(lay, label, field)
+
+        lay.addStretch()
+        self._save_actions.append(
+            lambda: keystore.save_all({k: f.text().strip() for k, f in self._key_fields.items()})
+        )
+        return body
+
+    # ── Вкладка Модель ──────────────────────────────────────────────────────
+
+    def _build_model_tab(self) -> QWidget:
+        body, lay = self._body_widget()
+
+        # Выбор модели
+        self._model_combo = QComboBox()
+        self._model_combo.addItems(_GROK_MODELS)
+        current_model = config.get("model") or "grok-4.3"
+        if current_model in _GROK_MODELS:
+            self._model_combo.setCurrentText(current_model)
+        self._model_combo.setFixedHeight(28)
+        self._row(lay, "Модель", self._model_combo)
+
+        # История
+        self._history_field = QLineEdit(str(config.get("history_limit") or 100))
+        self._history_field.setFixedHeight(28)
+        self._history_field.setObjectName("settings_field")
+        self._row(lay, "История (сообщений)", self._history_field)
+
+        # Поиск в интернете
+        self._web_search_combo = QComboBox()
+        self._web_search_combo.addItems(["Включён", "Выключён"])
+        self._web_search_combo.setCurrentIndex(0 if config.get("web_search") else 1)
+        self._web_search_combo.setFixedHeight(28)
+        self._row(lay, "Поиск в интернете", self._web_search_combo)
+
+        lay.addStretch()
+
+        self._save_actions.append(self._save_model_tab)
+        return body
+
+    def _save_model_tab(self):
+        if self._model_combo:
+            config.set("model", self._model_combo.currentText())
+        if self._history_field:
+            try:
+                config.set("history_limit", int(self._history_field.text().strip()))
+            except ValueError:
+                pass
+        if self._web_search_combo:
+            config.set("web_search", self._web_search_combo.currentIndex() == 0)
