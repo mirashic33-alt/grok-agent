@@ -95,9 +95,9 @@ class _ImageWidget(QFrame):
         self.setObjectName("image_frame")
         self.setStyleSheet(
             "QFrame#image_frame {"
-            "  border: 2px solid rgba(210, 210, 210, 0.5);"
-            "  border-radius: 8px;"
-            "  background: rgba(255, 255, 255, 0.04);"
+            "  border: 2px solid rgba(220, 220, 215, 0.85);"
+            "  border-radius: 10px;"
+            "  background: rgba(210, 205, 200, 0.82);"
             "}"
         )
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
