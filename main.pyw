@@ -8,6 +8,8 @@ from ui.theme import build_qss
 if __name__ == "__main__":
     setup_logger()
     keystore.load_if_exists()
+    from core.memory_loader import ensure_workspace_files
+    ensure_workspace_files()
     app = QApplication(sys.argv)
     app.setStyleSheet(build_qss())
     win = MainWindow()

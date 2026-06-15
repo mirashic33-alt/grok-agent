@@ -1,0 +1,22 @@
+{
+    "bg_color": "#bab5a4",
+    "chat_bg": "#e2ded2",
+    "input_bg": "#e2ded2",
+    "text_color": "#58564e",
+    "border_color": "#8d897c",
+    "button_bg": "#e2ded2",
+    "button_hover_bg": "#c8c2b4",
+    "button_pressed_bg": "#a0998a",
+	
+    "border_radius": 4,
+    "padding": 10,
+    "header_height": 20,
+    "input_height": 60,
+
+    "user_bubble_bg": "#d4cfc0",
+    "user_bubble_border": "#a89f90",
+    "agent_bubble_bg": "#ece8de",
+    "agent_bubble_border": "#c8c3b5",
+    "bubble_text_color": "#3a3630",
+    "bubble_prefix_color": "#6a5f4e"
+}

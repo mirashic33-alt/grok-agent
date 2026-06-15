@@ -47,25 +47,76 @@ COLORS = {
     "status_text":  _j["bubble_prefix_color"],
 }
 
-ICON_FONT = "Segoe MDL2 Assets"
+ICON_FONT = "Segoe Fluent Icons"
 RADIUS    = _j["border_radius"]
 INPUT_H   = _j["input_height"]
 BTN_SIZE  = 32    # квадратные кнопки тулбара и mic
 MID_SIZE  = 36    # нижние кнопки
 
+# Все иконки — Segoe MDL2 Assets
+# Как менять: находишь на https://learn.microsoft.com/ru-ru/windows/apps/design/iconography/segoe-fluent-icons-font
+# Берёшь код, например E74D → пишешь chr(0xE74D)
 ICONS = {
-    "send":     chr(0xE724),
-    "mic":      chr(0xE720),
-    "settings": chr(0xE713),
-    "theme":    chr(0xE771),
-    "header":   chr(0xEC44),   # менять здесь если нужна другая иконка
-    "antenna":  chr(0xECA5),   # NetworkTower — иконка интернета
+    # ── Тулбар ──────────────────────────────────────────────────────────────
+    "header":      chr(0xf6fa),  # EC44  Hexagon              — логотип в шапке
+    "settings":    chr(0xE713),  # E713  Settings             — шестерёнка
+    "theme":       chr(0xE771),  # E771  Color                — палитра тем
+
+    # ── Поле ввода ──────────────────────────────────────────────────────────
+    "send":        chr(0xE724),  # E724  Send                 — отправить
+    "mic":         chr(0xE720),  # E720  Microphone           — микрофон
+    "attach":      chr(0xE723),  # E723  Attach               — прикрепить файл/картинку
+
+    # ── Нижние кнопки ───────────────────────────────────────────────────────
+    "open_file":   chr(0xE8A7),  # E8A7  OpenFile             — открыть файл
+    "open_folder": chr(0xE8B7),  # E8B7  OpenWith             — открыть папку
+    "clear_chat":  chr(0xE74D),  # E74D  Delete               — ведро / очистить чат
+    "timer":       chr(0xE916),  # E916  Clock                — таймер
+    "more":        chr(0xE712),  # E712  More                 — три точки / ещё
+
+    # ── Прочее ──────────────────────────────────────────────────────────────
+    "antenna":     chr(0xECA5),  # ECA5  NetworkTower         — индикатор интернета
 }
 
-ANTENNA_ON_COLOR  = "#4FC3F7"   # голубой — интернет включён
+# Иконки для пузырьков инструментов
+TOOL_ICONS = {
+    "web_search":        chr(0xE774),  # E774  World        — поиск в интернете
+    "read_file":         chr(0xE8A7),  # E8A7  OpenFile     — читать файл
+    "read_file_lines":   chr(0xE8A7),  # E8A7  OpenFile     — читать строки
+    "get_file_info":     chr(0xE946),  # E946  Info         — инфо о файле
+    "write_file":        chr(0xE74E),  # E74E  Save         — записать файл
+    "append_file":       chr(0xE710),  # E710  Add          — дописать
+    "insert_into_file":  chr(0xE70F),  # E70F  Edit         — вставить в файл
+    "replace_in_file":   chr(0xE70F),  # E70F  Edit         — заменить текст
+    "create_file":       chr(0xE8A5),  # E8A5  Page         — создать файл
+    "delete_file":       chr(0xE74D),  # E74D  Delete       — удалить файл
+    "rename_file":       chr(0xE8AC),  # E8AC  Rename       — переименовать
+    "copy_file":         chr(0xE8C8),  # E8C8  Copy         — копировать
+    "move_file":         chr(0xE8DE),  # E8DE  MoveToFolder — переместить
+    "create_directory":  chr(0xE8F4),  # E8F4  NewFolder    — создать папку
+    "delete_directory":  chr(0xE74D),  # E74D  Delete       — удалить папку
+    "list_files":        chr(0xE8B7),  # E8B7  OpenWith     — список файлов
+    "search_files":      chr(0xE721),  # E721  Search       — найти файлы
+    "search_in_files":   chr(0xE721),  # E721  Search       — найти в файлах
+    "get_drives":        chr(0xEDA2),  # EDA2  HardDrive    — диски
+    "tree":              chr(0xE8B1),  # E8B1  Map          — дерево папки
+    "generate_image":    chr(0xE8B9),  # E8B9  Picture      — генерация картинки
+    "take_screenshot":   chr(0xE722),  # E722  Camera       — скриншот
+    "run_command":       chr(0xE756),  # E756  Code         — команда
+    "run_script":        chr(0xE8F4),  # E8F4  NewFolder    — запуск скрипта
+}
+TOOL_ICON_DEFAULT = chr(0xE9CE)       # E9CE  Processing   — неизвестный инструмент
 
-MID_ICONS = [chr(0xE8A7), chr(0xE8B7), chr(0xE74D), chr(0xE916), chr(0xE712)]
-MID_TIPS  = ["Открыть файл", "Открыть папку", "Очистить чат", "Таймер", "Ещё"]
+# Нижние кнопки: (ключ из ICONS, подсказка)
+# Чтобы поменять иконку — меняй ключ выше в ICONS, не здесь
+MID_BUTTONS = [
+    ("attach",      "Прикрепить файл или картинку"),
+    ("open_file",   "Открыть файл"),
+    ("open_folder", "Открыть папку"),
+    ("clear_chat",  "Очистить чат"),
+    ("timer",       "Таймер"),
+    ("more",        "Ещё"),
+]
 
 
 def build_qss():
@@ -175,12 +226,29 @@ QFrame#bubble_tool {{
     border: 1px solid {c['border']};
     border-radius: {r}px;
 }}
+QLabel#bubble_tool_icon {{
+    font-family: '{f}';
+    font-size: 13px;
+    color: {c['dim_text']};
+    background-color: transparent;
+    padding: 0px;
+}}
 QLabel#bubble_tool_text {{
     font-size: 11px;
     color: {c['dim_text']};
     background-color: transparent;
-    padding: 4px 12px;
+    padding: 0px;
     font-style: italic;
+}}
+QPushButton#bubble_speak_btn {{
+    font-family: '{f}';
+    background-color: transparent;
+    border: none;
+    color: {c['dim_text']};
+    padding: 0px 8px 0px 0px;
+}}
+QPushButton#bubble_speak_btn:hover {{
+    color: {c['text']};
 }}
 
 /* Поле ввода */

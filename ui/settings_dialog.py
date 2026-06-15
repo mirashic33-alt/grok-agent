@@ -11,7 +11,25 @@ _KEY_FIELDS = [
     ("TELEGRAM_CHAT_ID", "Telegram Chat ID",     "Ваш числовой chat_id...",         False),
 ]
 
-_GROK_MODELS = ["grok-4.3", "grok-3", "grok-3-mini", "grok-2-vision-1212"]
+_BILLING_FIELDS = [
+    ("MGMT_API_KEY", "Management Key", "Ключ billing-reader (xai-token-...)", True),
+    ("TEAM_ID",      "Team ID",        "UUID из console.x.ai/team/.../settings", False),
+]
+
+_TTS_VOICES = [
+    ("ara", "Ara — тёплый, дружелюбный (быстрее)"),
+    ("eve", "Eve — энергичный, живой (медленнее)"),
+    ("sal", "Sal — ровный, универсальный"),
+    ("rex", "Rex — уверенный, чёткий"),
+    ("leo", "Leo — авторитетный, сильный"),
+]
+
+# (model_id, label с ценами)
+_GROK_MODELS = [
+    ("grok-4.3",  "grok-4.3   — $1.25 / $2.50 за 1M"),
+    ("grok-4.20", "grok-4.20  — $2.00 / $6.00 за 1M"),
+    ("grok-4.1",  "grok-4.1   — $0.20 / $0.50 за 1M"),
+]
 
 
 def _hline() -> QFrame:
@@ -26,9 +44,11 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Настройки")
         self.setMinimumWidth(480)
-        self.setFixedHeight(340)
+        self.setFixedHeight(360)
         self.setModal(True)
         self._key_fields: dict[str, QLineEdit] = {}
+        self._billing_fields: dict[str, QLineEdit] = {}
+        self._billing_interval_field: QLineEdit | None = None
         self._history_field: QLineEdit | None = None
         self._model_combo: QComboBox | None = None
         self._web_search_combo: QComboBox | None = None
@@ -85,6 +105,11 @@ class SettingsDialog(QDialog):
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(12, 8, 12, 8)
         fl.setSpacing(8)
+        billing_link = QLabel('<a href="https://console.x.ai" style="color:#cdd6f4;text-decoration:none;">console.x.ai</a>')
+        billing_link.setObjectName("settings_link")
+        billing_link.setOpenExternalLinks(True)
+        billing_link.setToolTip("Открыть консоль x.ai — баланс, расходы, API-ключи")
+        fl.addWidget(billing_link)
         fl.addStretch()
         cancel_btn = QPushButton("Отмена")
         cancel_btn.setFixedSize(90, 30)
@@ -97,8 +122,10 @@ class SettingsDialog(QDialog):
         fl.addWidget(save_btn)
         root.addWidget(footer)
 
-        self._add_tab("keys",  "Ключи",  self._build_keys_tab)
-        self._add_tab("model", "Модель", self._build_model_tab)
+        self._add_tab("keys",    "Ключи",   self._build_keys_tab)
+        self._add_tab("model",   "Модель",  self._build_model_tab)
+        self._add_tab("voice",   "Голос",   self._build_voice_tab)
+        self._add_tab("billing", "Биллинг", self._build_billing_tab)
         self._switch_tab("keys")
 
     # ── Система вкладок ──────────────────────────────────────────────────────
@@ -166,10 +193,13 @@ class SettingsDialog(QDialog):
 
         # Выбор модели
         self._model_combo = QComboBox()
-        self._model_combo.addItems(_GROK_MODELS)
         current_model = config.get("model") or "grok-4.3"
-        if current_model in _GROK_MODELS:
-            self._model_combo.setCurrentText(current_model)
+        for model_id, label in _GROK_MODELS:
+            self._model_combo.addItem(label, model_id)
+        for i, (model_id, _) in enumerate(_GROK_MODELS):
+            if model_id == current_model:
+                self._model_combo.setCurrentIndex(i)
+                break
         self._model_combo.setFixedHeight(28)
         self._row(lay, "Модель", self._model_combo)
 
@@ -193,7 +223,7 @@ class SettingsDialog(QDialog):
 
     def _save_model_tab(self):
         if self._model_combo:
-            config.set("model", self._model_combo.currentText())
+            config.set("model", self._model_combo.currentData())
         if self._history_field:
             try:
                 config.set("history_limit", int(self._history_field.text().strip()))
@@ -201,3 +231,72 @@ class SettingsDialog(QDialog):
                 pass
         if self._web_search_combo:
             config.set("web_search", self._web_search_combo.currentIndex() == 0)
+
+    # ── Вкладка Голос ───────────────────────────────────────────────────────
+
+    def _build_voice_tab(self) -> QWidget:
+        body, lay = self._body_widget()
+
+        self._tts_combo = QComboBox()
+        self._tts_combo.addItem("Выключен", "")
+        for voice_id, label in _TTS_VOICES:
+            self._tts_combo.addItem(label, voice_id)
+        current_voice = config.get("tts_voice") if config.get("tts_enabled") else ""
+        for i in range(self._tts_combo.count()):
+            if self._tts_combo.itemData(i) == current_voice:
+                self._tts_combo.setCurrentIndex(i)
+                break
+        self._tts_combo.setFixedHeight(28)
+        self._row(lay, "Голос озвучки", self._tts_combo)
+
+        lay.addStretch()
+        self._save_actions.append(self._save_voice_tab)
+        return body
+
+    def _save_voice_tab(self):
+        voice_id = self._tts_combo.currentData()
+        config.set("tts_enabled", bool(voice_id))
+        if voice_id:
+            config.set("tts_voice", voice_id)
+
+    # ── Вкладка Биллинг ─────────────────────────────────────────────────────
+
+    def _build_billing_tab(self) -> QWidget:
+        body, lay = self._body_widget()
+
+        hint = QLabel("Ключи для мониторинга баланса xAI.\n"
+                      "Создай Management Key в console.x.ai > Settings.")
+        hint.setObjectName("settings_row_label")
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
+
+        for key, label, placeholder, secret in _BILLING_FIELDS:
+            field = QLineEdit(keystore.get(key))
+            field.setPlaceholderText(placeholder)
+            field.setFixedHeight(28)
+            field.setObjectName("settings_field")
+            if secret:
+                field.setEchoMode(QLineEdit.EchoMode.Password)
+            self._billing_fields[key] = field
+            self._row(lay, label, field)
+
+        self._billing_interval_field = QLineEdit(str(config.get("billing_interval") or 60))
+        self._billing_interval_field.setFixedHeight(28)
+        self._billing_interval_field.setObjectName("settings_field")
+        self._billing_interval_field.setPlaceholderText("60")
+        self._row(lay, "Интервал (сек)", self._billing_interval_field)
+
+        lay.addStretch()
+        self._save_actions.append(self._save_billing_tab)
+        return body
+
+    def _save_billing_tab(self):
+        data = {k: keystore.get(k) for k in [f[0] for f in _KEY_FIELDS]}
+        data.update({k: f.text().strip() for k, f in self._billing_fields.items()})
+        keystore.save_all(data)
+        if self._billing_interval_field:
+            try:
+                val = max(10, int(self._billing_interval_field.text().strip()))
+                config.set("billing_interval", val)
+            except ValueError:
+                pass

@@ -1,8 +1,11 @@
 {
-    "model": "grok-4.3",
-    "theme": "dark.json",
+    "model": "grok-4.1",
+    "theme": "pink.json",
     "window_width": 920,
     "window_height": 720,
     "history_limit": 100,
-    "web_search": true
+    "web_search": true,
+    "tts_enabled": true,
+    "tts_voice": "ara",
+    "billing_interval": 60
 }

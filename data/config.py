@@ -7,8 +7,10 @@ _DEFAULTS = {
     "theme":         "dark.json",
     "window_width":  920,
     "window_height": 720,
-    "history_limit": 100,
+    "history_limit": 500,
     "web_search":    True,
+    "tts_enabled":   False,
+    "tts_voice":     "ara",
 }
 
 

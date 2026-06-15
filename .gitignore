@@ -1,5 +1,6 @@
 # Ключи и секреты
 data/keys.enc
+check_balance.py
 
 # Логи
 agent.log
@@ -8,6 +9,23 @@ workspace/token_usage.log
 # История разговоров (личное)
 workspace/chat_history.json
 workspace/memory/
+
+# Файлы личности агента (создаются автоматически при старте, у каждого свои)
+workspace/SOUL.md
+workspace/USER.md
+workspace/MEMORY.md
+workspace/STYLE.md
+workspace/skills/
+
+# Картинки и личные скрипты
+workspace/img/
+workspace/scripts/
+
+# Сценарии для YouTube (личное, не для репо)
+сценарий_*.md
+сценарий_*.txt
+*_visual.md
+СЦЕНАРИЙ_ФОРМАТ.md
 
 # Python кеш
 __pycache__/

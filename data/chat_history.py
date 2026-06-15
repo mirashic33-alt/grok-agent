@@ -6,7 +6,10 @@ Stores the last _limit() messages, rotates automatically.
 
 import json
 import os
+import pathlib
 from datetime import datetime
+
+_ROOT = pathlib.Path(__file__).parent.parent
 
 def _limit() -> int:
     try:
@@ -15,13 +18,22 @@ def _limit() -> int:
     except Exception:
         return 100
 
-HISTORY_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "workspace", "chat_history.json"
-)
+HISTORY_PATH = str(_ROOT / "workspace" / "chat_history.json")
+IMG_DIR = _ROOT / "workspace" / "img"
 
 
 def _ensure_dir():
     os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
+
+
+def save_image(image_bytes: bytes, ext: str = "jpg") -> str:
+    """Сохранить картинку в workspace/img/, вернуть абсолютный путь."""
+    IMG_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:19]
+    filename = f"{ts}.{ext}"
+    path = IMG_DIR / filename
+    path.write_bytes(image_bytes)
+    return str(path)
 
 
 def load() -> list[dict]:
@@ -37,7 +49,7 @@ def load() -> list[dict]:
     return []
 
 
-def append(role: str, text: str, elapsed: float = 0.0) -> list[dict]:
+def append(role: str, text: str, elapsed: float = 0.0, image_path: str = "") -> list[dict]:
     messages = load()
     entry = {
         "role": role,
@@ -47,6 +59,8 @@ def append(role: str, text: str, elapsed: float = 0.0) -> list[dict]:
     }
     if elapsed:
         entry["elapsed"] = round(elapsed, 1)
+    if image_path:
+        entry["image_path"] = image_path
     messages.append(entry)
     if len(messages) > _limit():
         messages = messages[-_limit():]
