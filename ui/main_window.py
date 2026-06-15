@@ -95,12 +95,12 @@ class _ImageWidget(QFrame):
         self.setObjectName("image_frame")
         self.setStyleSheet(
             "QFrame#image_frame {"
-            "  border: 1px solid rgba(210, 210, 210, 0.6);"
+            "  border: 2px solid rgba(210, 210, 210, 0.5);"
             "  border-radius: 8px;"
-            "  padding: 0px;"
-            "  background: transparent;"
+            "  background: rgba(255, 255, 255, 0.04);"
             "}"
         )
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         if path:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
         lbl = QLabel()
@@ -108,7 +108,7 @@ class _ImageWidget(QFrame):
         lbl.setContentsMargins(0, 0, 0, 0)
         lbl.setStyleSheet("border: none; background: transparent;")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(8, 8, 8, 8)  # 8px поле по периметру
         layout.setSpacing(0)
         layout.addWidget(lbl)
 
@@ -347,8 +347,12 @@ class MainWindow(QMainWindow):
             if not px.isNull():
                 scaled = px.scaledToWidth(480, Qt.TransformationMode.SmoothTransformation)
                 img_widget = _ImageWidget(scaled, path=image_path)
-                img_widget.setContentsMargins(0, 4, 0, 0)
-                bl.addWidget(img_widget)
+                from PySide6.QtWidgets import QHBoxLayout as _QHBox
+                img_row = _QHBox()
+                img_row.setContentsMargins(12, 4, 12, 8)
+                img_row.addWidget(img_widget)
+                img_row.addStretch()
+                bl.addLayout(img_row)
 
         self._last_bubble = bubble
         self._chat_layout.addWidget(bubble)
@@ -638,6 +642,7 @@ class MainWindow(QMainWindow):
             img_bytes = pathlib.Path(path).read_bytes()
         except Exception:
             return
+        chat_history.append("agent", "", image_path=path)
         self.add_bubble("", is_user=False, image=img_bytes, image_path=path)
         self._scroll_to_bottom()
         if self._tg:

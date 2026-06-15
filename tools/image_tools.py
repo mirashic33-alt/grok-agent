@@ -30,7 +30,6 @@ def generate_image(prompt: str) -> str:
         model="grok-imagine-image-quality",
         prompt=prompt,
         n=1,
-        size="1792x1024",
         response_format="b64_json",
     )
     b64_data = resp.data[0].b64_json
