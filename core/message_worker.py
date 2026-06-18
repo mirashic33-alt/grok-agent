@@ -11,6 +11,7 @@ class MessageWorker(QThread):
     error         = Signal(str)
     tool_used     = Signal(str, str)     # (tool name, tool label)
     image_ready   = Signal(str)          # path to generated/screenshot image
+    interim_text  = Signal(str)          # промежуточный текст между вызовами инструментов
 
     def __init__(self, history: list[dict], model: str = "grok-4.3", images: list | None = None):
         super().__init__()
@@ -27,7 +28,10 @@ class MessageWorker(QThread):
             def _on_image(path: str):
                 self.image_ready.emit(path)
 
-            text    = provider.chat(self._history, self._model, on_tool_call=_on_tool, images=self._images, on_image_ready=_on_image)
+            def _on_interim(text: str):
+                self.interim_text.emit(text)
+
+            text    = provider.chat(self._history, self._model, on_tool_call=_on_tool, images=self._images, on_image_ready=_on_image, on_interim_text=_on_interim)
             elapsed = time.monotonic() - t0
             _log.info(f"Reply in {elapsed:.1f}s")
             self.finished.emit(text, elapsed)

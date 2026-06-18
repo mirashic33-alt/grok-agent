@@ -30,6 +30,10 @@ _TOOL_EMOJI = {
     "tree":              "🌳",
     "run_command":       "⚡",
     "run_script":        "▶️",
+    "move_to_trash":     "🗑",
+    "run_background":    "🚀",
+    "stop_process":      "🛑",
+    "list_processes":    "📋",
 }
 
 
@@ -201,8 +205,6 @@ class TelegramBot(QThread):
                         continue
                     cid = str(msg["chat"]["id"])
                     text = msg.get("text", "").strip()
-                    if not text:
-                        continue
 
                     # Setup mode: chat_id не заполнен — говорим его пользователю
                     if not self._chat_id:
@@ -232,7 +234,7 @@ class TelegramBot(QThread):
                         self.send("История чата очищена.")
                         continue
 
-                    # Фото
+                    # Фото — проверяем до пустого текста
                     photo = msg.get("photo")
                     doc   = msg.get("document")
                     if photo or (doc and (doc.get("mime_type") or "").startswith("image/")):
@@ -242,6 +244,9 @@ class TelegramBot(QThread):
                         if image_bytes:
                             _log.info(f"← TG: photo ({len(image_bytes)} bytes), caption={caption!r}")
                             self.image_received.emit(caption, image_bytes)
+                        continue
+
+                    if not text:
                         continue
 
                     _log.info(f"← TG: {text[:80]!r}")

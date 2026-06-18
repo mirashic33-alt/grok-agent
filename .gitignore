@@ -4,7 +4,14 @@ check_balance.py
 
 # Логи
 agent.log
+app.log
 workspace/token_usage.log
+
+# Дайджесты (личные выжимки)
+workspace/digests/
+
+# Личные инструкции для сессий
+INFOGRAPHICS_SKILL.md
 
 # История разговоров (личное)
 workspace/chat_history.json
@@ -21,9 +28,14 @@ workspace/skills/
 workspace/img/
 workspace/scripts/
 
+# Локальные модели STT (большие файлы, не для репо)
+models/
+
 # Сценарии для YouTube (личное, не для репо)
 сценарий_*.md
 сценарий_*.txt
+шаг_*.md
+шаг_*.txt
 *_visual.md
 СЦЕНАРИЙ_ФОРМАТ.md
 

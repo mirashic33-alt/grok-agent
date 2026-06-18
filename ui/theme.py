@@ -50,6 +50,8 @@ COLORS = {
 ICON_FONT = "Segoe Fluent Icons"
 RADIUS    = _j["border_radius"]
 INPUT_H   = _j["input_height"]
+WINDOW_W  = _j.get("window_width",  841)
+WINDOW_H  = _j.get("window_height", 520)
 BTN_SIZE  = 32    # квадратные кнопки тулбара и mic
 MID_SIZE  = 36    # нижние кнопки
 

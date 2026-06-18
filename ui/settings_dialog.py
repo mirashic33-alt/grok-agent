@@ -2,7 +2,7 @@ import data.keystore as keystore
 import data.config as config
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QStackedWidget,
-    QLabel, QLineEdit, QPushButton, QFrame, QWidget, QComboBox,
+    QLabel, QLineEdit, QPushButton, QFrame, QWidget, QComboBox, QCheckBox,
 )
 
 _KEY_FIELDS = [
@@ -216,6 +216,27 @@ class SettingsDialog(QDialog):
         self._web_search_combo.setFixedHeight(28)
         self._row(lay, "Поиск в интернете", self._web_search_combo)
 
+        # Дигесты (выжимки дней)
+        self._digests_combo = QComboBox()
+        _digest_options = [
+            (0, "Выключены"),
+            (1, "1 день"),
+            (2, "2 дня"),
+            (3, "3 дня"),
+            (5, "5 дней"),
+            (10, "10 дней"),
+        ]
+        current_count = config.get("digests_count") or 0
+        for val, label in _digest_options:
+            self._digests_combo.addItem(label, val)
+        for i, (val, _) in enumerate(_digest_options):
+            if val == current_count:
+                self._digests_combo.setCurrentIndex(i)
+                break
+        self._digests_combo.setFixedHeight(28)
+        self._digests_combo.setToolTip("Сколько дней-выжимок подгружать в контекст при каждом запросе")
+        self._row(lay, "Дигесты (выжимки)", self._digests_combo)
+
         lay.addStretch()
 
         self._save_actions.append(self._save_model_tab)
@@ -231,6 +252,8 @@ class SettingsDialog(QDialog):
                 pass
         if self._web_search_combo:
             config.set("web_search", self._web_search_combo.currentIndex() == 0)
+        if self._digests_combo:
+            config.set("digests_count", self._digests_combo.currentData())
 
     # ── Вкладка Голос ───────────────────────────────────────────────────────
 
@@ -249,6 +272,20 @@ class SettingsDialog(QDialog):
         self._tts_combo.setFixedHeight(28)
         self._row(lay, "Голос озвучки", self._tts_combo)
 
+        # Микрофон (Vosk)
+        self._mic_check = QCheckBox()
+        self._mic_check.setChecked(bool(config.get("mic_enabled")))
+        self._mic_check.setToolTip(
+            "При первом включении скачается модель Vosk (~45MB).\n"
+            "Модель загружается в память при каждом старте приложения."
+        )
+        self._row(lay, "Микрофон (Vosk STT)", self._mic_check)
+
+        hint = QLabel("При первом включении скачается модель ~45MB.\nЗагружается в фоне при старте.")
+        hint.setObjectName("settings_row_label")
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
+
         lay.addStretch()
         self._save_actions.append(self._save_voice_tab)
         return body
@@ -258,6 +295,7 @@ class SettingsDialog(QDialog):
         config.set("tts_enabled", bool(voice_id))
         if voice_id:
             config.set("tts_voice", voice_id)
+        config.set("mic_enabled", self._mic_check.isChecked())
 
     # ── Вкладка Биллинг ─────────────────────────────────────────────────────
 

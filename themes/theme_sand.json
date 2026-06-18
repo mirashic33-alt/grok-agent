@@ -11,7 +11,9 @@
     "border_radius": 4,
     "padding": 10,
     "header_height": 20,
-    "input_height": 60,
+    "input_height": 90,
+    "window_width": 715,
+    "window_height": 825,
 
     "user_bubble_bg": "#d4cfc0",
     "user_bubble_border": "#a89f90",

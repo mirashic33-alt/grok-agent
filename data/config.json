@@ -1,11 +1,14 @@
 {
     "model": "grok-4.1",
     "theme": "pink.json",
-    "window_width": 920,
-    "window_height": 720,
+    "window_width": 715,
+    "window_height": 825,
     "history_limit": 100,
     "web_search": true,
     "tts_enabled": true,
     "tts_voice": "ara",
+    "mic_enabled": true,
+    "digest_model": "grok-3-mini",
+    "digests_count": 2,
     "billing_interval": 60
 }

@@ -8,6 +8,7 @@ from openai import OpenAI
 import tools.file_tools as file_tools
 import tools.shell_tools as shell_tools
 import tools.image_tools as image_tools
+import tools.process_tools as process_tools
 
 _log = logger.get_logger("llm")
 
@@ -36,6 +37,10 @@ _TOOL_LABELS = {
     "run_script":        "Запускаю скрипт",
     "generate_image":    "Рисую картинку",
     "take_screenshot":   "Делаю скриншот",
+    "move_to_trash":     "Перемещаю в корзину",
+    "run_background":    "Запускаю в фоне",
+    "stop_process":      "Останавливаю процесс",
+    "list_processes":    "Смотрю процессы",
 }
 
 
@@ -75,6 +80,7 @@ def chat(
     on_tool_call: Callable[[str, str], None] | None = None,
     images: list | None = None,
     on_image_ready: Callable[[str], None] | None = None,
+    on_interim_text: Callable[[str], None] | None = None,
 ) -> str:
     import data.config as cfg
     if model is None:
@@ -86,7 +92,7 @@ def chat(
     client = _client()
 
     # Собираем инструменты: file tools всегда, web_search по настройке
-    tools = list(file_tools.SCHEMAS_RESPONSES) + list(shell_tools.SCHEMAS_RESPONSES) + list(image_tools.SCHEMAS_RESPONSES)
+    tools = list(file_tools.SCHEMAS_RESPONSES) + list(shell_tools.SCHEMAS_RESPONSES) + list(image_tools.SCHEMAS_RESPONSES) + list(process_tools.SCHEMAS_RESPONSES)
     if web_search:
         tools.insert(0, {"type": "web_search"})
 
@@ -135,6 +141,7 @@ def chat(
             out_tokens += getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
 
         has_tool_call = False
+        turn_text = ""
 
         for item in resp.output:
             itype = getattr(item, "type", None)
@@ -177,6 +184,8 @@ def chat(
                     result = image_tools.dispatch(name, args)
                 elif name in shell_tools._DISPATCH:
                     result = shell_tools.dispatch(name, args)
+                elif name in process_tools._DISPATCH:
+                    result = process_tools.dispatch(name, args)
                 else:
                     result = file_tools.dispatch(name, args)
                 _log.info(f"tool result [{name}]: {result[:300]}")
@@ -213,10 +222,36 @@ def chat(
             elif itype == "message":
                 for part in item.content:
                     if getattr(part, "type", None) == "output_text":
-                        final_text = part.text
+                        turn_text = part.text
+
+        # Текст в этом turn: если были инструменты — промежуточный, иначе — финальный
+        if turn_text:
+            if has_tool_call:
+                if on_interim_text and turn_text.strip():
+                    on_interim_text(turn_text.strip())
+            else:
+                final_text = turn_text
 
         if not has_tool_call:
             break
+
+    # Если модель выполнила инструменты но не дала финального ответа — запросить итог
+    if not final_text.strip():
+        _log.warning("No final text after tool loop — requesting summary")
+        input_msgs.append({"role": "user", "content": "Ты не дала финального ответа. Напиши полноценный отчёт: что именно было сделано, что получилось, какие детали важны пользователю."})
+        try:
+            resp_final = client.responses.create(model=model, input=input_msgs, tools=[], store=False)
+            usage2 = getattr(resp_final, "usage", None)
+            if usage2:
+                out_tokens += getattr(usage2, "output_tokens", 0) or getattr(usage2, "completion_tokens", 0)
+            for item in resp_final.output:
+                if getattr(item, "type", None) == "message":
+                    for part in item.content:
+                        if getattr(part, "type", None) == "output_text" and part.text:
+                            final_text = part.text
+                            break
+        except Exception as e:
+            _log.error(f"Summary request failed: {e}")
 
     token_log.record(in_tokens, out_tokens)
     _log.debug(f"Tokens: in={in_tokens} out={out_tokens} | Response: {len(final_text)} chars")

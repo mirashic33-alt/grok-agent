@@ -5,12 +5,15 @@ _PATH = pathlib.Path(__file__).parent / "config.json"
 _DEFAULTS = {
     "model":         "grok-4.3",
     "theme":         "dark.json",
-    "window_width":  920,
-    "window_height": 720,
+    "window_width":  715,
+    "window_height": 825,
     "history_limit": 500,
     "web_search":    True,
     "tts_enabled":   False,
     "tts_voice":     "ara",
+    "mic_enabled":   False,
+    "digest_model":  "grok-3-mini",
+    "digests_count": 2,
 }
 
 

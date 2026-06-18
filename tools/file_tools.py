@@ -186,6 +186,23 @@ def delete_file(path: str) -> str:
         return f"[Ошибка] {e}"
 
 
+def move_to_trash(path: str) -> str:
+    """Переместить файл или папку в корзину."""
+    try:
+        p = _p(path)
+        if _is_protected(p):
+            return f"[Отказано] Путь защищён: {p}"
+        if not p.exists():
+            return f"[Не найден] {path}"
+        import send2trash
+        send2trash.send2trash(str(p))
+        return f"[OK] Перемещён в корзину: {p}"
+    except ImportError:
+        return "[Ошибка] Библиотека send2trash не установлена. Выполни: pip install send2trash"
+    except Exception as e:
+        return f"[Ошибка] {e}"
+
+
 def rename_file(path: str, new_name: str) -> str:
     """Переименовать файл или папку. new_name — только имя, без пути."""
     try:
@@ -389,6 +406,7 @@ _DISPATCH = {
     "replace_in_file":    lambda a: replace_in_file(**a),
     "create_file":        lambda a: create_file(**a),
     "delete_file":        lambda a: delete_file(**a),
+    "move_to_trash":      lambda a: move_to_trash(**a),
     "rename_file":        lambda a: rename_file(**a),
     "copy_file":          lambda a: copy_file(**a),
     "move_file":          lambda a: move_file(**a),
@@ -543,11 +561,25 @@ SCHEMAS = [
         "type": "function",
         "function": {
             "name": "delete_file",
-            "description": "Удалить файл.",
+            "description": "Удалить файл безвозвратно. Используй только если нужно именно уничтожить файл. Для удаления с возможностью восстановления используй move_to_trash.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Путь к файлу"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "move_to_trash",
+            "description": "Переместить файл или папку в корзину. Предпочтительный способ удаления — файл можно восстановить.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Путь к файлу или папке"},
                 },
                 "required": ["path"],
             },

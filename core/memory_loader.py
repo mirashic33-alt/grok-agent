@@ -14,8 +14,9 @@ import glob
 import os
 from tools.time_sense import get_time_block
 
-_ROOT      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_WORKSPACE = os.path.join(_ROOT, "workspace")
+_ROOT        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_WORKSPACE   = os.path.join(_ROOT, "workspace")
+_DIGESTS_DIR = os.path.join(_WORKSPACE, "digests")
 
 _MEMORY_FILES = [
     ("agent.md",  "AGENT"),
@@ -24,6 +25,29 @@ _MEMORY_FILES = [
     ("SOUL.md",   "SOUL"),
     ("STYLE.md",  "STYLE"),
 ]
+
+
+def _load_digests() -> str:
+    try:
+        import data.config as cfg
+        n = int(cfg.get("digests_count") or 0)
+    except Exception:
+        n = 2
+    if n == 0 or not os.path.isdir(_DIGESTS_DIR):
+        return ""
+    files = sorted(f for f in os.listdir(_DIGESTS_DIR) if f.endswith(".md"))
+    recent = files[-n:]
+    parts = []
+    for fname in recent:
+        path = os.path.join(_DIGESTS_DIR, fname)
+        try:
+            content = open(path, encoding="utf-8").read().strip()
+            if content:
+                date = fname.replace(".md", "")
+                parts.append(f"--- ДАЙДЖЕСТ {date} ---\n{content}")
+        except Exception:
+            pass
+    return "\n\n".join(parts)
 
 
 def ensure_workspace_files():
@@ -95,6 +119,10 @@ def build_system_prompt() -> str:
     skills_block = _load_skills()
     if skills_block:
         sections.append(skills_block)
+
+    digests_block = _load_digests()
+    if digests_block:
+        sections.append(digests_block)
 
     # Пути — модель должна точно знать где что лежит
     sections.append(_build_paths_block())

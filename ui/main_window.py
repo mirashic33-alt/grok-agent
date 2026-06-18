@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QPixmap
 from datetime import datetime
-from PySide6.QtCore import Qt, Signal, QProcess, QTimer, QThread
+from PySide6.QtCore import Qt, Signal, QObject, QProcess, QTimer, QThread
 from PySide6.QtGui import QFont
 import data.config as config
 import data.token_log as token_log
@@ -15,7 +15,7 @@ from data.billing import fetch_balance
 
 from ui.theme import (
     ICONS, MID_BUTTONS, ICON_FONT, COLORS,
-    INPUT_H, BTN_SIZE, MID_SIZE,
+    INPUT_H, BTN_SIZE, MID_SIZE, WINDOW_W, WINDOW_H,
     list_themes, get_active_path, set_active_theme,
 )
 import data.chat_history as chat_history
@@ -30,6 +30,18 @@ def _h_line():
     line.setFrameShape(QFrame.Shape.HLine)
     line.setFixedHeight(1)
     return line
+
+
+def _stt_fmt(text: str) -> str:
+    text = text.strip()
+    return text[0].upper() + text[1:] if text else text
+
+
+class _SttSig(QObject):
+    partial = Signal(str)
+    final   = Signal(str)
+    status  = Signal(str)
+    ready   = Signal(bool)
 
 
 class _InnerEdit(QTextEdit):
@@ -86,6 +98,13 @@ class InputBubble(QFrame):
         if text:
             self.editor.clear()
 
+    def set_preview(self, base: str, partial: str):
+        sep = " " if base and not base.endswith("\n") else ""
+        self.editor.setPlainText((base + sep + partial).strip() if partial else base)
+        c = self.editor.textCursor()
+        c.movePosition(c.MoveOperation.End)
+        self.editor.setTextCursor(c)
+
 
 class _ImageWidget(QFrame):
     """Картинка с рамкой и открытием по клику."""
@@ -133,8 +152,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Grok Agent")
-        self.resize(920, 720)
-        self.setMinimumSize(640, 480)
+        self.resize(WINDOW_W, WINDOW_H)
+        self.setMinimumSize(400, 360)
         self._worker: MessageWorker | None = None
         self._tg: TelegramBot | None = None
         self._billing_worker: _BillingWorker | None = None
@@ -144,6 +163,20 @@ class MainWindow(QMainWindow):
         self._attach_btn = None             # ссылка на кнопку в mid_buttons
         self._request_start = 0.0
         self._active_tool = ""
+
+        # STT
+        self._stt_recording = False
+        self._stt_chunks: list = []
+        self._stt_stream = None
+        self._stt_rec = None
+        self._stt_committed = ""
+        self._stt_base = ""
+        self._mic_btn = None
+        self._stt_sig = _SttSig()
+        self._stt_sig.status.connect(self._set_status)
+        self._stt_sig.ready.connect(self._stt_on_ready)
+        self._stt_sig.partial.connect(self._stt_on_partial)
+        self._stt_sig.final.connect(self._stt_on_final)
 
         self._think_timer = QTimer(self)
         self._think_timer.setInterval(100)
@@ -169,6 +202,8 @@ class MainWindow(QMainWindow):
         self._load_history()
         self._start_tg()
         self._start_billing_timer()
+        if config.get("mic_enabled"):
+            self._start_stt_load()
 
     # ── Тулбар ──────────────────────────────────────────────────────────────
 
@@ -358,8 +393,17 @@ class MainWindow(QMainWindow):
         self._chat_layout.addWidget(bubble)
 
     def _scroll_to_bottom(self):
-        if self._last_bubble:
-            self._scroll.ensureWidgetVisible(self._last_bubble)
+        QTimer.singleShot(80, self._do_scroll)
+
+    def _do_scroll(self):
+        if self._last_bubble and self._last_bubble.isVisible():
+            bottom = self._last_bubble.geometry().bottom()
+            viewport_h = self._scroll.viewport().height()
+            self._scroll.verticalScrollBar().setValue(max(0, bottom - viewport_h + 16))
+        else:
+            self._scroll.verticalScrollBar().setValue(
+                self._scroll.verticalScrollBar().maximum()
+            )
 
     # ── Ввод ────────────────────────────────────────────────────────────────
 
@@ -371,14 +415,17 @@ class MainWindow(QMainWindow):
         self.input_bubble = InputBubble()
         self.input_bubble.send_requested.connect(self._on_send)
 
-        mic_btn = QPushButton(ICONS["mic"])
-        mic_btn.setObjectName("mic_btn")
-        mic_btn.setFont(QFont(ICON_FONT, 17))
-        mic_btn.setFixedSize(MID_SIZE, MID_SIZE)
-        mic_btn.setToolTip("Нажмите и держите для записи")
+        self._mic_btn = QPushButton(ICONS["mic"])
+        self._mic_btn.setObjectName("mic_btn")
+        self._mic_btn.setFont(QFont(ICON_FONT, 17))
+        self._mic_btn.setFixedSize(MID_SIZE, MID_SIZE)
+        self._mic_btn.setToolTip("Нажмите и держите для записи")
+        self._mic_btn.setEnabled(False)
+        self._mic_btn.pressed.connect(self._start_mic)
+        self._mic_btn.released.connect(self._stop_mic)
 
         row.addWidget(self.input_bubble)
-        row.addWidget(mic_btn)
+        row.addWidget(self._mic_btn)
         return row
 
     # ── Нижние кнопки ───────────────────────────────────────────────────────
@@ -476,6 +523,89 @@ class MainWindow(QMainWindow):
         self._billing_timer = QTimer(self)
         self._billing_timer.timeout.connect(self._refresh_billing)
         self._billing_timer.start(interval)
+
+    # ── STT (Vosk) ──────────────────────────────────────────────────────────
+
+    def _start_stt_load(self):
+        import core.stt as stt
+        import threading
+        self._set_status("Загружаю Vosk STT...")
+        def _worker():
+            stt.load(
+                on_status=lambda s: self._stt_sig.status.emit(s),
+                on_progress=None,
+            )
+            self._stt_sig.ready.emit(stt.is_loaded())
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _stt_on_ready(self, ok: bool):
+        if self._mic_btn:
+            self._mic_btn.setEnabled(ok)
+        if not ok:
+            self._set_status("Vosk: ошибка загрузки", error=True)
+
+    def _start_mic(self):
+        import core.stt as stt
+        import sounddevice as sd
+        if not stt.is_loaded():
+            return
+        self._stt_recording = True
+        self._stt_chunks = []
+        self._stt_base = self.input_bubble.editor.toPlainText()
+        self._stt_committed = ""
+        self._stt_rec = stt.new_recognizer()
+        self._set_status("🔴 Запись...")
+        self._stt_stream = sd.InputStream(
+            samplerate=stt.SAMPLE_RATE, channels=1, dtype="int16",
+            callback=self._stt_audio_cb,
+        )
+        self._stt_stream.start()
+
+    def _stt_audio_cb(self, indata, frames, time_info, status):
+        if not self._stt_recording:
+            return
+        self._stt_chunks.append(indata.copy())
+        if self._stt_rec is None:
+            return
+        import core.stt as stt
+        phrase_done, text = stt.feed(self._stt_rec, indata.flatten().tobytes())
+        if phrase_done:
+            if text:
+                self._stt_committed += (".\n" if self._stt_committed else "") + _stt_fmt(text)
+            self._stt_sig.partial.emit(self._stt_committed)
+        else:
+            if text:
+                sep = "\n" if self._stt_committed else ""
+                display = self._stt_committed + sep + _stt_fmt(text)
+            else:
+                display = self._stt_committed
+            self._stt_sig.partial.emit(display)
+
+    def _stop_mic(self):
+        import core.stt as stt
+        self._stt_recording = False
+        if self._stt_stream:
+            self._stt_stream.stop()
+            self._stt_stream.close()
+            self._stt_stream = None
+        if not self._stt_chunks:
+            self._set_status("Готов.")
+            return
+        if self._stt_rec is not None:
+            tail = stt.final_result(self._stt_rec)
+            if tail:
+                self._stt_committed += (".\n" if self._stt_committed else "") + _stt_fmt(tail)
+            if self._stt_committed and self._stt_committed[-1] not in ".!?,;":
+                self._stt_committed += "."
+            self._stt_rec = None
+        self._stt_sig.final.emit(self._stt_committed)
+        self._set_status("Готов.")
+
+    def _stt_on_partial(self, text: str):
+        self.input_bubble.set_preview(self._stt_base, text)
+
+    def _stt_on_final(self, text: str):
+        self.input_bubble.set_preview(self._stt_base, text)
 
     def _restart_billing_timer(self):
         interval = (config.get("billing_interval") or 60) * 1000
@@ -613,6 +743,7 @@ class MainWindow(QMainWindow):
         self._worker.error.connect(self._on_error)
         self._worker.tool_used.connect(self._on_tool_used)
         self._worker.image_ready.connect(self._on_image_ready)
+        self._worker.interim_text.connect(self._on_interim_text)
         self._worker.start()
         if self._tg:
             self._tg.start_typing()
@@ -673,6 +804,26 @@ class MainWindow(QMainWindow):
         row.addStretch()
         bl.addLayout(row)
         self._last_bubble = bubble
+        self._chat_layout.addWidget(bubble)
+        self._scroll_to_bottom()
+
+    def _on_interim_text(self, text: str):
+        if self._tg:
+            self._tg.send(text)
+        bubble = QFrame()
+        bubble.setObjectName("bubble_tool")
+        bubble.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        bl = QVBoxLayout(bubble)
+        bl.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout()
+        row.setContentsMargins(12, 6, 12, 6)
+        row.setSpacing(6)
+        lbl = QLabel(text)
+        lbl.setObjectName("bubble_tool_text")
+        lbl.setWordWrap(True)
+        row.addWidget(lbl)
+        row.addStretch()
+        bl.addLayout(row)
         self._chat_layout.addWidget(bubble)
         self._scroll_to_bottom()
 
